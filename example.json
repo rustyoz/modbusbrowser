@@ -1,0 +1,20 @@
+[
+    {
+        "address": 0,
+        "type": "register",
+        "name": "Temperature",
+        "format": "float",
+        "scale": 0.1
+    },
+    {
+        "address": 1,
+        "type": "coil",
+        "name": "Status"
+    },
+    {
+        "address": 2,
+        "type": "register",
+        "name": "Status Word",
+        "format": "hex"
+    }
+] 
