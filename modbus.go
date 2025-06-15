@@ -58,13 +58,13 @@ func (c *ModbusClient) ReadCoil(address uint16) (bool, error) {
 }
 
 // ReadHoldingRegisters reads multiple holding registers
-func (c *ModbusClient) ReadHoldingRegisters(address uint16, quantity uint16) ([]interface{}, error) {
+func (c *ModbusClient) ReadHoldingRegisters(address uint16, quantity uint16) ([]uint16, error) {
 	results, err := c.client.ReadHoldingRegisters(address, quantity)
 	if err != nil {
 		return nil, err
 	}
 
-	registers := make([]interface{}, quantity)
+	registers := make([]uint16, quantity)
 	for i := uint16(0); i < quantity; i++ {
 		registers[i] = uint16(results[i*2])<<8 | uint16(results[i*2+1])
 	}
@@ -72,13 +72,13 @@ func (c *ModbusClient) ReadHoldingRegisters(address uint16, quantity uint16) ([]
 }
 
 // ReadInputRegisters reads multiple input registers
-func (c *ModbusClient) ReadInputRegisters(address uint16, quantity uint16) ([]interface{}, error) {
+func (c *ModbusClient) ReadInputRegisters(address uint16, quantity uint16) ([]uint16, error) {
 	results, err := c.client.ReadInputRegisters(address, quantity)
 	if err != nil {
 		return nil, err
 	}
 
-	registers := make([]interface{}, quantity)
+	registers := make([]uint16, quantity)
 	for i := uint16(0); i < quantity; i++ {
 		registers[i] = uint16(results[i*2])<<8 | uint16(results[i*2+1])
 	}
@@ -86,13 +86,13 @@ func (c *ModbusClient) ReadInputRegisters(address uint16, quantity uint16) ([]in
 }
 
 // ReadCoils reads multiple coils
-func (c *ModbusClient) ReadCoils(address uint16, quantity uint16) ([]interface{}, error) {
+func (c *ModbusClient) ReadCoils(address uint16, quantity uint16) ([]bool, error) {
 	results, err := c.client.ReadCoils(address, quantity)
 	if err != nil {
 		return nil, err
 	}
 
-	coils := make([]interface{}, quantity)
+	coils := make([]bool, quantity)
 	for i := uint16(0); i < quantity; i++ {
 		coils[i] = results[i] == 1
 	}
@@ -100,13 +100,13 @@ func (c *ModbusClient) ReadCoils(address uint16, quantity uint16) ([]interface{}
 }
 
 // ReadDiscreteInputs reads multiple discrete inputs
-func (c *ModbusClient) ReadDiscreteInputs(address uint16, quantity uint16) ([]interface{}, error) {
+func (c *ModbusClient) ReadDiscreteInputs(address uint16, quantity uint16) ([]bool, error) {
 	results, err := c.client.ReadDiscreteInputs(address, quantity)
 	if err != nil {
 		return nil, err
 	}
 
-	inputs := make([]interface{}, quantity)
+	inputs := make([]bool, quantity)
 	for i := uint16(0); i < quantity; i++ {
 		inputs[i] = results[i] == 1
 	}
