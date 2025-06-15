@@ -827,6 +827,19 @@
                 }
             });
         }
+
+        function toggleServerTable(serverId) {
+            const content = document.getElementById(`server-content-${serverId}`);
+            const icon = document.getElementById(`toggle-icon-${serverId}`);
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.textContent = '▼';
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▶';
+            }
+        }
     </script>
 </body>
 

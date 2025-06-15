@@ -74,7 +74,12 @@ const (
 			{{range .}}
 			<div class="card mb-4" id="server-{{.ID}}">
 				<div class="card-header d-flex justify-content-between align-items-center">
-					<h5 class="mb-0">Server: {{.ID}}</h5>
+					<div class="d-flex align-items-center">
+						<button class="btn btn-sm btn-outline-secondary me-2" onclick="toggleServerTable('{{.ID}}')">
+							<span id="toggle-icon-{{.ID}}">▼</span>
+						</button>
+						<h5 class="mb-0">Server: {{.ID}}</h5>
+					</div>
 					<div>
 						<button class="btn btn-info btn-sm me-2" onclick="showAddBlockModal('{{.ID}}')" data-server-id="{{.ID}}">
 							<i class="bi bi-plus-circle"></i> Add Block
@@ -92,7 +97,7 @@ const (
 								hx-swap="outerHTML swap:1s">Remove</button>
 					</div>
 				</div>
-				<div class="card-body">
+				<div class="card-body" id="server-content-{{.ID}}">
 					<div class="table-responsive">
 						<table class="table table-striped table-hover">
 							<thead>
