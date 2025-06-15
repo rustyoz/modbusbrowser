@@ -40,9 +40,10 @@ func logMessage(level LogLevel, format string, v ...interface{}) {
 
 // RegisterConfig represents the configuration for a register
 type RegisterConfig struct {
-	Name    string `json:"name"`
-	Format  string `json:"format"` // "decimal", "hex", "float", "boolean"
-	Address uint16 `json:"address"`
+	Name         string `json:"name"`
+	Format       string `json:"format"` // "decimal", "hex", "float", "boolean", "string-byte", "string-word"
+	Address      uint16 `json:"address"`
+	StringLength int    `json:"stringLength,omitempty"`
 }
 
 // RegisterBlock represents a block of registers to read
@@ -407,6 +408,76 @@ func handleServer(w http.ResponseWriter, r *http.Request) {
 					} else {
 						displayValue = value
 					}
+				case "string-byte":
+					// For string-byte format, we need to read multiple registers and combine them
+					if addr < 40000 { // input registers
+						registers := make([]uint16, regConfig.StringLength/2+1)
+						for j := uint16(0); j < uint16(len(registers)); j++ {
+							if addr+j >= block.StartAddress+block.Length {
+								registers[j] = 0
+							} else {
+								registers[j] = server.dataModel.InputRegisters[addr+j-30000]
+							}
+						}
+						// Convert registers to bytes and then to string
+						bytes := make([]byte, 0, regConfig.StringLength)
+						for _, reg := range registers {
+							bytes = append(bytes, byte(reg>>8), byte(reg))
+						}
+						// Trim null bytes and convert to string
+						displayValue = strings.TrimRight(string(bytes), "\x00")
+					} else { // holding registers
+						registers := make([]uint16, regConfig.StringLength/2+1)
+						for j := uint16(0); j < uint16(len(registers)); j++ {
+							if addr+j >= block.StartAddress+block.Length {
+								registers[j] = 0
+							} else {
+								registers[j] = server.dataModel.HoldingRegisters[addr+j-40000]
+							}
+						}
+						// Convert registers to bytes and then to string
+						bytes := make([]byte, 0, regConfig.StringLength)
+						for _, reg := range registers {
+							bytes = append(bytes, byte(reg>>8), byte(reg))
+						}
+						// Trim null bytes and convert to string
+						displayValue = strings.TrimRight(string(bytes), "\x00")
+					}
+					i = i + uint16(regConfig.StringLength/2)
+				case "string-word":
+					// For string-word format, each register represents one character
+					if addr < 40000 { // input registers
+						registers := make([]uint16, regConfig.StringLength)
+						for j := uint16(0); j < uint16(len(registers)); j++ {
+							if addr+j >= block.StartAddress+block.Length {
+								registers[j] = 0
+							} else {
+								registers[j] = server.dataModel.InputRegisters[addr+j-30000]
+							}
+						}
+						// Convert registers to characters
+						chars := make([]rune, 0, regConfig.StringLength)
+						for _, reg := range registers {
+							chars = append(chars, rune(reg))
+						}
+						displayValue = string(chars)
+					} else { // holding registers
+						registers := make([]uint16, regConfig.StringLength)
+						for j := uint16(0); j < uint16(len(registers)); j++ {
+							if addr+j >= block.StartAddress+block.Length {
+								registers[j] = 0
+							} else {
+								registers[j] = server.dataModel.HoldingRegisters[addr+j-40000]
+							}
+						}
+						// Convert registers to characters
+						chars := make([]rune, 0, regConfig.StringLength)
+						for _, reg := range registers {
+							chars = append(chars, rune(reg))
+						}
+						displayValue = string(chars)
+					}
+					i = i + uint16(regConfig.StringLength-1)
 				default: // decimal
 					displayValue = value
 				}

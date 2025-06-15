@@ -306,12 +306,19 @@
                         </div>
                         <div class="mb-3">
                             <label for="registerFormat" class="form-label">Format</label>
-                            <select class="form-select" id="registerFormat" required>
+                            <select class="form-select" id="registerFormat" required onchange="updateStringLengthField()">
                                 <option value="decimal">Decimal</option>
                                 <option value="hex">Hexadecimal</option>
                                 <option value="float">Float</option>
                                 <option value="boolean">Boolean</option>
+                                <option value="string-byte">String (packed bytes)</option>
+                                <option value="string-word">String (one char per word)</option>
                             </select>
+                        </div>
+                        <div class="mb-3" id="stringLengthContainer" style="display: none;">
+                            <label for="stringLength" class="form-label">Maximum String Length</label>
+                            <input type="number" class="form-control" id="stringLength" min="1" max="125">
+                            <small class="form-text text-muted">Maximum number of characters in the string</small>
                         </div>
                     </form>
                 </div>
@@ -501,7 +508,24 @@
                     <option value="hex">Hexadecimal</option>
                     <option value="float">Float</option>
                     <option value="boolean">Boolean</option>
+                    <option value="string-byte">String (packed bytes)</option>
+                    <option value="string-word">String (one char per word)</option>
                 `;
+            }
+            updateStringLengthField();
+        }
+
+        function updateStringLengthField() {
+            const format = document.getElementById('registerFormat').value;
+            const stringLengthContainer = document.getElementById('stringLengthContainer');
+            const stringLength = document.getElementById('stringLength');
+
+            if (format === 'string-byte' || format === 'string-word') {
+                stringLengthContainer.style.display = 'block';
+                stringLength.required = true;
+            } else {
+                stringLengthContainer.style.display = 'none';
+                stringLength.required = false;
             }
         }
 
@@ -510,6 +534,7 @@
             const name = document.getElementById('registerName').value;
             const baseAddress = parseInt(document.getElementById('registerAddress').value);
             const format = document.getElementById('registerFormat').value;
+            const stringLength = parseInt(document.getElementById('stringLength').value);
 
             if (!name || isNaN(baseAddress)) {
                 alert('Please fill in all fields');
@@ -755,6 +780,7 @@
             const name = document.getElementById('registerName').value;
             const baseAddress = parseInt(document.getElementById('registerAddress').value);
             const format = document.getElementById('registerFormat').value;
+            const stringLength = parseInt(document.getElementById('stringLength').value);
 
             if (!name || isNaN(baseAddress)) {
                 alert('Please fill in all fields');
@@ -764,6 +790,18 @@
             let size = 1;
             if (format === 'float') {
                 size = 2;
+            } else if (format === 'string-byte') {
+                if (!stringLength || stringLength < 1) {
+                    alert('Please specify a valid string length');
+                    return;
+                }
+                size = Math.ceil(stringLength / 2); // Each register holds 2 bytes
+            } else if (format === 'string-word') {
+                if (!stringLength || stringLength < 1) {
+                    alert('Please specify a valid string length');
+                    return;
+                }
+                size = stringLength; // Each register holds 1 character
             }
 
             // Calculate the actual Modbus address based on register type
@@ -784,7 +822,8 @@
                 name,
                 address,
                 format,
-                type
+                type,
+                stringLength,
             };
 
             // Get current server configuration first and then add the new register
@@ -868,6 +907,8 @@
                     <option value="hex">Hexadecimal</option>
                     <option value="float">Float</option>
                     <option value="boolean">Boolean</option>
+                    <option value="string-byte">String (packed bytes)</option>
+                    <option value="string-word">String (one char per word)</option>
                 `;
             }
         }
