@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modbus Browser Help</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            padding: 20px;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+            margin-top: 1.5em;
+        }
+        h1 {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 0.3em;
+        }
+        h2 {
+            border-bottom: 1px solid #eee;
+            padding-bottom: 0.2em;
+        }
+        code {
+            background-color: #f8f9fa;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        .feature-list {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        .feature-list li {
+            margin-bottom: 0.5em;
+            padding-left: 1.5em;
+            position: relative;
+        }
+        .feature-list li:before {
+            content: "✓";
+            color: #28a745;
+            position: absolute;
+            left: 0;
+        }
+        .note {
+            background-color: #e7f5ff;
+            border-left: 4px solid #339af0;
+            padding: 1em;
+            margin: 1em 0;
+        }
+        .warning {
+            background-color: #fff3bf;
+            border-left: 4px solid #fcc419;
+            padding: 1em;
+            margin: 1em 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Modbus Browser Help</h1>
+    
+    <h2>Quick Start Guide</h2>
+    <ol>
+        <li>Click "Add Server" to connect to a Modbus device</li>
+        <li>Enter the server details (ID, IP address, port)</li>
+        <li>Add register blocks or individual registers to monitor</li>
+        <li>View real-time data in the table below</li>
+    </ol>
+
+    <h2>Key Features</h2>
+    <ul class="feature-list">
+        <li><strong>Multi-Server Support:</strong> Monitor multiple Modbus devices simultaneously</li>
+        <li><strong>Real-Time Updates:</strong> Live polling of register values</li>
+        <li><strong>Multiple Data Formats:</strong> View values in decimal, hex, float, or boolean</li>
+        <li><strong>Bulk Operations:</strong> Add multiple registers at once</li>
+        <li><strong>Configuration Management:</strong> Save and load server configurations</li>
+    </ul>
+
+    <h2>Register Types</h2>
+    <ul>
+        <li><strong>Coils (0-9999):</strong> Single-bit read/write values</li>
+        <li><strong>Discrete Inputs (10000-19999):</strong> Single-bit read-only values</li>
+        <li><strong>Input Registers (30000-39999):</strong> 16-bit read-only values</li>
+        <li><strong>Holding Registers (40000-49999):</strong> 16-bit read/write values</li>
+    </ul>
+
+    <h2>Data Formats</h2>
+    <ul>
+        <li><strong>Decimal:</strong> Standard numeric representation</li>
+        <li><strong>Hexadecimal:</strong> Base-16 representation (0x0000-0xFFFF)</li>
+        <li><strong>Float:</strong> 32-bit floating point (uses 2 registers)</li>
+        <li><strong>Boolean:</strong> True/False values</li>
+    </ul>
+
+    <div class="note">
+        <strong>Note:</strong> Float values require 2 consecutive registers. The first register contains the high word, and the second contains the low word.
+    </div>
+
+    <h2>Adding Registers</h2>
+    <h3>Single Register</h3>
+    <ol>
+        <li>Click "Add Register"</li>
+        <li>Select register type</li>
+        <li>Enter register name and address</li>
+        <li>Choose data format</li>
+        <li>Click "Add Register"</li>
+    </ol>
+
+    <h3>Register Block</h3>
+    <ol>
+        <li>Click "Add Block"</li>
+        <li>Select register type</li>
+        <li>Enter start address and length</li>
+        <li>Click "Add Block"</li>
+    </ol>
+
+    <h3>Bulk Add</h3>
+    <p>Use CSV format to add multiple registers at once:</p>
+    <code>name,address,format</code>
+    <p>Example:</p>
+    <pre><code>Temperature,1000,decimal
+Pressure,1001,float
+Status,1002,boolean</code></pre>
+
+    <div class="warning">
+        <strong>Best Practices:</strong>
+        <ul>
+            <li>Start with a higher poll rate (1000-5000ms) and adjust as needed</li>
+            <li>Monitor only necessary registers to reduce network traffic</li>
+            <li>Use descriptive names for easy identification</li>
+            <li>Keep register blocks under 125 registers for optimal performance</li>
+        </ul>
+    </div>
+
+    <h2>Troubleshooting</h2>
+    <ul>
+        <li><strong>Connection Issues:</strong> Verify IP address, port, and network connectivity</li>
+        <li><strong>No Data:</strong> Check register addresses and types</li>
+        <li><strong>Slow Updates:</strong> Adjust poll rate or reduce number of registers</li>
+        <li><strong>Invalid Values:</strong> Verify data format matches register type</li>
+    </ul>
+
+    <h2>Configuration Management</h2>
+    <ul>
+        <li><strong>Save Config:</strong> Click "Show Config" and then "Download Config"</li>
+        <li><strong>Load Config:</strong> Click "Upload Config" and select your JSON file</li>
+    </ul>
+
+    <div class="note">
+        <strong>Tip:</strong> Save your configuration after setting up servers and registers. This makes it easy to restore your setup later.
+    </div>
+</body>
+</html> 

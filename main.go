@@ -544,9 +544,21 @@ func handleConfigUpload(w http.ResponseWriter, r *http.Request) {
 		go pollServer(server)
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-	})
+	if isHtmxRequest(r) {
+		w.Header().Set("HX-Trigger", "load")
+		// Return the updated server list
+		serverList := make([]map[string]string, 0, len(servers))
+		for id := range servers {
+			serverList = append(serverList, map[string]string{"ID": id})
+		}
+		tmpl := template.Must(template.New("serverList").Parse(serverListTemplate))
+		w.Header().Set("Content-Type", "text/html")
+		tmpl.Execute(w, serverList)
+	} else {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+		})
+	}
 }
 
 // handleGetConfig returns the current server configuration
