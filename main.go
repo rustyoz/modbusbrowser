@@ -61,7 +61,6 @@ type ModbusServer struct {
 	mu             sync.Mutex                `json:"-"`
 	registerMap    map[uint16]RegisterConfig `json:"-"`
 	dataModel      ModbusDataModel           `json:"-"`
-	blocks         []RegisterBlock           `json:"-"`
 }
 
 var (
@@ -72,36 +71,47 @@ var (
 // HTML templates
 const (
 	serverListTemplate = `
-		{{range .}}
-		<div class="card mb-4" id="server-{{.ID}}">
-			<div class="card-header d-flex justify-content-between align-items-center">
-				<h5 class="mb-0">Server: {{.ID}}</h5>
-				<button class="btn btn-danger btn-sm" 
-						hx-delete="/api/servers/{{.ID}}"
-						hx-confirm="Are you sure you want to remove server {{.ID}}?"
-						hx-target="#server-{{.ID}}"
-						hx-swap="outerHTML swap:1s">Remove</button>
-			</div>
-			<div class="card-body">
-				<div class="table-responsive">
-					<table class="table table-striped table-hover">
-						<thead>
-							<tr>
-								<th>Address</th>
-								<th>Name</th>
-								<th>Value</th>
-								<th>Format</th>
-							</tr>
-						</thead>
-						<tbody hx-get="/api/servers/{{.ID}}" 
-							   hx-trigger="load, every 1s" 
-							   hx-swap="innerHTML">
-						</tbody>
-					</table>
+			{{range .}}
+			<div class="card mb-4" id="server-{{.ID}}">
+				<div class="card-header d-flex justify-content-between align-items-center">
+					<h5 class="mb-0">Server: {{.ID}}</h5>
+					<div>
+						<button class="btn btn-info btn-sm me-2" onclick="showAddBlockModal('{{.ID}}')" data-server-id="{{.ID}}">
+							<i class="bi bi-plus-circle"></i> Add Block
+						</button>
+						<button class="btn btn-info btn-sm me-2" onclick="showAddRegisterModal('{{.ID}}')" data-server-id="{{.ID}}">
+							<i class="bi bi-plus-circle"></i> Add Register
+						</button>
+						<button class="btn btn-info btn-sm me-2" onclick="showBulkAddModal('{{.ID}}')" data-server-id="{{.ID}}">
+							<i class="bi bi-plus-circle"></i> Bulk Add
+						</button>
+						<button class="btn btn-danger btn-sm" 
+								hx-delete="/api/servers/{{.ID}}"
+								hx-confirm="Are you sure you want to remove server {{.ID}}?"
+								hx-target="#server-{{.ID}}"
+								hx-swap="outerHTML swap:1s">Remove</button>
+					</div>
+				</div>
+				<div class="card-body">
+					<div class="table-responsive">
+						<table class="table table-striped table-hover">
+							<thead>
+								<tr>
+									<th>Address</th>
+									<th>Name</th>
+									<th>Value</th>
+									<th>Format</th>
+								</tr>
+							</thead>
+							<tbody hx-get="/api/servers/{{.ID}}" 
+								   hx-trigger="load, every 1s" 
+								   hx-swap="innerHTML">
+							</tbody>
+						</table>
+					</div>
 				</div>
 			</div>
-		</div>
-		{{end}}`
+			{{end}}`
 
 	registerTableTemplate = `
 		{{range .}}
@@ -120,9 +130,9 @@ func main() {
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 	http.Handle("/", fs)
 
-	// API endpoints
-	http.HandleFunc("/api/servers", handleServers)
+	http.HandleFunc("/api/servers/config/", handleServerConfig)
 	http.HandleFunc("/api/servers/", handleServer)
+	http.HandleFunc("/api/servers", handleServers)
 	http.HandleFunc("/api/config/upload", handleConfigUpload)
 	http.HandleFunc("/api/config", handleGetConfig)
 
@@ -179,7 +189,6 @@ func handleServers(w http.ResponseWriter, r *http.Request) {
 			config.Address = r.FormValue("address")
 			config.Port, _ = strconv.Atoi(r.FormValue("port"))
 			config.PollRate, _ = strconv.Atoi(r.FormValue("pollRate"))
-
 		}
 
 		// Initialize the complete Modbus data model
@@ -213,6 +222,11 @@ func handleServers(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 		if isHtmxRequest(r) {
 			w.Header().Set("HX-Trigger", "load")
+			// Return the updated server list
+			serverList := []map[string]string{{"ID": server.ID}}
+			tmpl := template.Must(template.New("serverList").Parse(serverListTemplate))
+			w.Header().Set("Content-Type", "text/html")
+			tmpl.Execute(w, serverList)
 		} else {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": true,
@@ -249,7 +263,7 @@ func handleServer(w http.ResponseWriter, r *http.Request) {
 		data := make([]map[string]interface{}, 0)
 
 		// Only include values that are configured in register blocks
-		for _, block := range server.blocks {
+		for _, block := range server.RegisterBlocks {
 
 			log.Printf("block: %+v", block)
 			for i := uint16(0); i < block.Length; i++ {
@@ -381,10 +395,6 @@ func handleServer(w http.ResponseWriter, r *http.Request) {
 func handleConfigUpload(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("handleConfigUpload: %s %s", r.Method, r.URL.Path)
-	// print headers
-	for k, v := range r.Header {
-		log.Printf("Header: %s: %s", k, v)
-	}
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -446,7 +456,7 @@ func handleConfigUpload(w http.ResponseWriter, r *http.Request) {
 		server.client = nil // Will be set below
 		server.registerMap = registerMap
 		server.dataModel = ModbusDataModel{}
-		server.blocks = server.RegisterBlocks
+		server.RegisterBlocks = server.RegisterBlocks
 
 		// Create Modbus client
 		client, err := NewModbusClient(server.Address, server.Port)
@@ -500,6 +510,120 @@ func handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Add new handlers for modifying server configuration
+func handleServerConfig(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+	serverID := parts[4]
+
+	mu.RLock()
+	server, exists := servers[serverID]
+	mu.RUnlock()
+
+	if !exists {
+		handleError(w, r, fmt.Sprintf("Server not found: %s", serverID))
+		return
+	}
+
+	switch r.Method {
+
+	case http.MethodGet:
+		server.mu.Lock()
+		json.NewEncoder(w).Encode(server)
+		server.mu.Unlock()
+
+	case http.MethodPost:
+		var config ModbusServer
+
+		if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+			handleError(w, r, fmt.Sprintf("Invalid request body: %v", err))
+			return
+		}
+
+		server.mu.Lock()
+		// Update register map
+		registerMap := make(map[uint16]RegisterConfig)
+		for _, block := range config.RegisterBlocks {
+			for _, reg := range block.Registers {
+				registerMap[reg.Address] = reg
+			}
+		}
+		server.registerMap = registerMap
+
+		// Process new blocks and merge with existing ones
+		var newBlocks []RegisterBlock
+		for _, newBlock := range config.RegisterBlocks {
+			merged := false
+
+			// Try to merge with existing blocks
+			for i, existingBlock := range server.RegisterBlocks {
+				// Check if blocks overlap or are adjacent
+				if newBlock.StartAddress >= existingBlock.StartAddress &&
+					newBlock.StartAddress <= existingBlock.StartAddress+existingBlock.Length {
+
+					// Calculate total length needed
+					endAddr := newBlock.StartAddress + newBlock.Length
+					existingEndAddr := existingBlock.StartAddress + existingBlock.Length
+					totalLength := uint16(math.Max(float64(endAddr), float64(existingEndAddr))) - existingBlock.StartAddress
+
+					if totalLength <= 125 {
+						// Merge blocks
+						server.RegisterBlocks[i].Length = totalLength
+						server.RegisterBlocks[i].Registers = append(server.RegisterBlocks[i].Registers, newBlock.Registers...)
+						merged = true
+						break
+					}
+				}
+			}
+
+			if !merged {
+				// Split block if length > 125
+				remaining := newBlock.Length
+				currentAddr := newBlock.StartAddress
+				currentRegIdx := 0
+
+				for remaining > 0 {
+					length := uint16(math.Min(float64(remaining), 125))
+
+					// Create new block
+					block := RegisterBlock{
+						StartAddress: currentAddr,
+						Length:       length,
+					}
+
+					// Add registers that fall within this block
+					for i := currentRegIdx; i < len(newBlock.Registers); i++ {
+						reg := newBlock.Registers[i]
+						if reg.Address >= currentAddr && reg.Address < currentAddr+length {
+							block.Registers = append(block.Registers, reg)
+							currentRegIdx = i + 1
+						}
+					}
+
+					newBlocks = append(newBlocks, block)
+					remaining -= length
+					currentAddr += length
+				}
+			}
+		}
+
+		// Add any new blocks that couldn't be merged
+		server.RegisterBlocks = append(server.RegisterBlocks, newBlocks...)
+
+		server.mu.Unlock()
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+		})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 // Helper functions
 func isHtmxRequest(r *http.Request) bool {
 	return strings.Contains(r.Header.Get("HX-Request"), "true")
@@ -534,7 +658,7 @@ func pollServer(server *ModbusServer) {
 
 		server.mu.Lock()
 		// Process each register block
-		for _, block := range server.blocks {
+		for _, block := range server.RegisterBlocks {
 			switch {
 			case block.StartAddress < 10000: // Coils
 				values, err := server.client.ReadCoils(block.StartAddress, block.Length)

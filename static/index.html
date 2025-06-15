@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,11 +11,13 @@
         .register-value {
             font-family: monospace;
         }
+
         .register-card {
             margin-bottom: 1rem;
         }
     </style>
 </head>
+
 <body>
     <div class="container mt-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -27,15 +30,12 @@
                 <button class="btn btn-secondary me-2" onclick="document.getElementById('configFile').click()">
                     <i class="bi bi-upload"></i> Upload Config
                 </button>
-                <button class="btn btn-primary" 
-                        hx-get="/api/servers" 
-                        hx-target="#serverList" 
-                        hx-swap="innerHTML">
+                <button class="btn btn-primary" hx-get="/api/servers" hx-target="#serverList" hx-swap="innerHTML">
                     <i class="bi bi-arrow-clockwise"></i> Refresh Servers
                 </button>
             </div>
         </div>
-        
+
         <!-- Configuration Modal -->
         <div class="modal fade" id="configModal" tabindex="-1">
             <div class="modal-dialog modal-lg">
@@ -49,7 +49,8 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-primary" onclick="downloadConfig()">Download Config</button>
+                        <button type="button" class="btn btn-primary" onclick="downloadConfig()">Download
+                            Config</button>
                     </div>
                 </div>
             </div>
@@ -61,7 +62,7 @@
                 <h5 class="mb-0">Add Modbus Server</h5>
             </div>
             <div class="card-body">
-                <form id="addServerForm" hx-post="/api/servers" hx-swap="none" hx-on::after-request="this.reset()">
+                <form id="addServerForm" hx-post="/api/servers" hx-target="#serverList" hx-swap="beforeend">
                     <div class="row">
                         <div class="col-md-3">
                             <div class="mb-3">
@@ -78,13 +79,15 @@
                         <div class="col-md-2">
                             <div class="mb-3">
                                 <label for="serverPort" class="form-label">Port</label>
-                                <input type="number" class="form-control" id="serverPort" name="port" value="502" required>
+                                <input type="number" class="form-control" id="serverPort" name="port" value="502"
+                                    required>
                             </div>
                         </div>
                         <div class="col-md-2">
                             <div class="mb-3">
                                 <label for="pollRate" class="form-label">Poll Rate (ms)</label>
-                                <input type="number" class="form-control" id="pollRate" name="pollRate" value="1000" required>
+                                <input type="number" class="form-control" id="pollRate" name="pollRate" value="1000"
+                                    required>
                             </div>
                         </div>
                         <div class="col-md-2">
@@ -98,134 +101,142 @@
             </div>
         </div>
 
-        <!-- Register Block Configuration -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">Register Block Configuration</h5>
-            </div>
-            <div class="card-body">
-                <form id="registerBlockForm">
-                    <div class="row mb-3">
-                        <div class="col-md-3">
-                            <div class="mb-3">
-                                <label for="blockType" class="form-label">Block Type</label>
-                                <select class="form-select" id="blockType" required>
-                                    <option value="coil">Coil (0-9999)</option>
-                                    <option value="discrete">Discrete Input (10000-19999)</option>
-                                    <option value="input">Input Register (30000-39999)</option>
-                                    <option value="holding">Holding Register (40000-49999)</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="mb-3">
-                                <label for="blockStartAddress" class="form-label">Start Address</label>
-                                <input type="number" class="form-control" id="blockStartAddress" required min="0" max="9999">
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="mb-3">
-                                <label for="blockLength" class="form-label">Length</label>
-                                <input type="number" class="form-control" id="blockLength" required min="1" max="125">
-                                <small class="form-text text-muted">Max 125 registers per block</small>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="mb-3">
-                                <label class="form-label">&nbsp;</label>
-                                <button type="button" class="btn btn-primary d-block w-100" onclick="addRegisterBlock()">Add Block</button>
-                            </div>
-                        </div>
-                    </div>
-                </form>
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>Type</th>
-                                <th>Start Address</th>
-                                <th>Length</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="registerBlockList">
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Register Configuration -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">Register Configuration</h5>
-            </div>
-            <div class="card-body">
-                <form id="registerConfigForm">
-                    <div class="row mb-3">
-                        <div class="col-md-2">
-                            <div class="mb-3">
-                                <label for="registerType" class="form-label">Register Type</label>
-                                <select class="form-select" id="registerType" required onchange="updateAddressRange(); updateFormatOptions()">
-                                    <option value="coil">Coil (0-9999)</option>
-                                    <option value="discrete">Discrete Input (10000-19999)</option>
-                                    <option value="input">Input Register (30000-39999)</option>
-                                    <option value="holding">Holding Register (40000-49999)</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-2">
-                            <div class="mb-3">
-                                <label for="registerName" class="form-label">Register Name</label>
-                                <input type="text" class="form-control" id="registerName" required>
-                            </div>
-                        </div>
-                        <div class="col-md-2">
-                            <div class="mb-3">
-                                <label for="registerAddress" class="form-label">Register Address</label>
-                                <input type="number" class="form-control" id="registerAddress" required min="0" max="9999">
-                                <small class="form-text text-muted" id="addressRange"></small>
-                            </div>
-                        </div>
-                        <div class="col-md-2">
-                            <div class="mb-3">
-                                <label for="registerFormat" class="form-label">Format</label>
-                                <select class="form-select" id="registerFormat" required onchange="updateFormatOptions()">
-                                    <option value="decimal">Decimal</option>
-                                    <option value="hex">Hexadecimal</option>
-                                    <option value="float">Float</option>
-                                    <option value="boolean">Boolean</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-2">
-                            <div class="mb-3">
-                                <label class="form-label">&nbsp;</label>
-                                <button type="button" class="btn btn-primary d-block w-100" onclick="addRegisterConfig()">Add Register</button>
-                            </div>
-                        </div>
-                    </div>
-                </form>
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Type</th>
-                                <th>Address</th>
-                                <th>Format</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="registerConfigList">
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
         <!-- Server List -->
-        <div id="serverList" hx-get="/api/servers" hx-trigger="load">
+        <div id="serverListContainer">
+            <div id="serverList" hx-get="/api/servers" hx-trigger="load">
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Block Modal -->
+    <div class="modal fade" id="addBlockModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Register Block</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addBlockForm">
+                        <input type="hidden" id="blockServerId">
+                        <div class="mb-3">
+                            <label for="blockType" class="form-label">Block Type</label>
+                            <select class="form-select" id="blockType" required>
+                                <option value="coil">Coil (0-9999)</option>
+                                <option value="discrete">Discrete Input (10000-19999)</option>
+                                <option value="input">Input Register (30000-39999)</option>
+                                <option value="holding">Holding Register (40000-49999)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="blockStartAddress" class="form-label">Start Address</label>
+                            <input type="number" class="form-control" id="blockStartAddress" required min="0" max="9999">
+                        </div>
+                        <div class="mb-3">
+                            <label for="blockLength" class="form-label">Length</label>
+                            <input type="number" class="form-control" id="blockLength" required min="1" max="125">
+                            <small class="form-text text-muted">Max 125 registers per block</small>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="addBlock()">Add Block</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Register Modal -->
+    <div class="modal fade" id="addRegisterModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Register</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addRegisterForm">
+                        <input type="hidden" id="registerServerId">
+                        <div class="mb-3">
+                            <label for="registerType" class="form-label">Register Type</label>
+                            <select class="form-select" id="registerType" required onchange="updateAddressRange(); updateFormatOptions()">
+                                <option value="coil">Coil (0-9999)</option>
+                                <option value="discrete">Discrete Input (10000-19999)</option>
+                                <option value="input">Input Register (30000-39999)</option>
+                                <option value="holding">Holding Register (40000-49999)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="registerName" class="form-label">Register Name</label>
+                            <input type="text" class="form-control" id="registerName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="registerAddress" class="form-label">Register Address</label>
+                            <input type="number" class="form-control" id="registerAddress" required min="0" max="9999">
+                            <small class="form-text text-muted" id="addressRange"></small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="registerFormat" class="form-label">Format</label>
+                            <select class="form-select" id="registerFormat" required>
+                                <option value="decimal">Decimal</option>
+                                <option value="hex">Hexadecimal</option>
+                                <option value="float">Float</option>
+                                <option value="boolean">Boolean</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="addRegister()">Add Register</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Add Modal -->
+    <div class="modal fade" id="bulkAddModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Bulk Add Registers</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="bulkAddForm">
+                        <input type="hidden" id="bulkAddServerId">
+                        <div class="mb-3">
+                            <label for="bulkAddType" class="form-label">Register Type</label>
+                            <select class="form-select" id="bulkAddType" required onchange="updateBulkAddFormatOptions()">
+                                <option value="coil">Coil (0-9999)</option>
+                                <option value="discrete">Discrete Input (10000-19999)</option>
+                                <option value="input">Input Register (30000-39999)</option>
+                                <option value="holding">Holding Register (40000-49999)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="bulkAddFormat" class="form-label">Default Format</label>
+                            <select class="form-select" id="bulkAddFormat" required>
+                                <option value="decimal">Decimal</option>
+                                <option value="hex">Hexadecimal</option>
+                                <option value="float">Float</option>
+                                <option value="boolean">Boolean</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="bulkAddText" class="form-label">Register List (CSV format)</label>
+                            <p class="text-muted">Format: name,address,format (optional)</p>
+                            <p class="text-muted">If address is omitted, it will increment from the previous address.</p>
+                            <textarea id="bulkAddText" class="form-control" rows="10" placeholder="register1,1000&#10;register2,1001&#10;register3,,hex"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="processBulkAdd()">Add Registers</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -233,11 +244,27 @@
     <script>
         // Configuration modal management
         let configModal;
+        let addBlockModal;
+        let addRegisterModal;
+        let bulkAddModal;
 
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             configModal = new bootstrap.Modal(document.getElementById('configModal'));
+            addBlockModal = new bootstrap.Modal(document.getElementById('addBlockModal'));
+            addRegisterModal = new bootstrap.Modal(document.getElementById('addRegisterModal'));
+            bulkAddModal = new bootstrap.Modal(document.getElementById('bulkAddModal'));
+
+            // Set default values
+            document.getElementById('serverAddress').value = '127.0.0.1';
+            document.getElementById('blockType').value = 'holding';
+            document.getElementById('blockStartAddress').value = '0';
+            document.getElementById('blockLength').value = '10';
+            document.getElementById('registerType').value = 'holding';
+            document.getElementById('bulkAddType').value = 'holding';
+
             updateAddressRange();
             updateFormatOptions();
+            updateBulkAddFormatOptions();
         });
 
         function showConfig() {
@@ -278,8 +305,8 @@
             const type = document.getElementById('registerType').value;
             const addressInput = document.getElementById('registerAddress');
             const addressRange = document.getElementById('addressRange');
-            
-            switch(type) {
+
+            switch (type) {
                 case 'coil':
                     addressInput.min = 0;
                     addressInput.max = 9999;
@@ -306,10 +333,10 @@
         function updateFormatOptions() {
             const type = document.getElementById('registerType').value;
             const format = document.getElementById('registerFormat');
-            
+
             // Reset options
             format.innerHTML = '';
-            
+
             if (type === 'coil' || type === 'discrete') {
                 // For coils and discrete inputs, only boolean format makes sense
                 format.innerHTML = '<option value="boolean">Boolean</option>';
@@ -337,7 +364,7 @@
 
             // Calculate the actual Modbus address based on register type
             let address = baseAddress;
-            switch(type) {
+            switch (type) {
                 case 'discrete':
                     address += 10000;
                     break;
@@ -349,11 +376,11 @@
                     break;
             }
 
-            registerConfigs.push({ 
-                name, 
-                address, 
+            registerConfigs.push({
+                name,
+                address,
                 format,
-                type 
+                type
             });
             updateRegisterConfigTable();
             document.getElementById('registerConfigForm').reset();
@@ -396,7 +423,7 @@
 
             // Calculate the actual Modbus address based on block type
             let address = startAddress;
-            switch(type) {
+            switch (type) {
                 case 'discrete':
                     address += 10000;
                     break;
@@ -408,7 +435,7 @@
                     break;
             }
 
-            registerBlocks.push({ 
+            registerBlocks.push({
                 type,
                 startAddress: address,
                 length
@@ -437,7 +464,7 @@
         }
 
         // Update the server form handler to include register blocks
-        document.getElementById('addServerForm').addEventListener('htmx:afterRequest', function(evt) {
+        document.getElementById('addServerForm').addEventListener('htmx:afterRequest', function (evt) {
             if (evt.detail.successful) {
                 // Create server config with register blocks and register configurations
                 const serverId = document.getElementById('serverId').value;
@@ -446,16 +473,7 @@
                         id: serverId,
                         address: document.getElementById('serverAddress').value,
                         port: parseInt(document.getElementById('serverPort').value),
-                        pollRate: parseInt(document.getElementById('pollRate').value),
-                        registerBlocks: registerBlocks.map(block => ({
-                            startAddress: block.startAddress,
-                            length: block.length,
-                            registers: registerConfigs.filter(reg => {
-                                // Filter registers that fall within this block's range
-                                return reg.address >= block.startAddress && 
-                                       reg.address < block.startAddress + block.length;
-                            })
-                        }))
+                        pollRate: parseInt(document.getElementById('pollRate').value)
                     }]
                 };
 
@@ -467,27 +485,21 @@
                     },
                     body: JSON.stringify(config)
                 })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        registerBlocks = [];
-                        registerConfigs = [];
-                        updateRegisterBlockTable();
-                        updateRegisterConfigTable();
-                        htmx.trigger('#serverList', 'load');
-                    } else {
-                        alert('Error: ' + data.error);
-                    }
-                })
-                .catch(error => {
-                    alert('Error uploading config: ' + error);
-                });
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            htmx.trigger('#serverList', 'load');
+                        } else {
+                            alert('Error: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        alert('Error uploading config: ' + error);
+                    });
             } else {
                 alert('Error: ' + (evt.detail.xhr.response ? JSON.parse(evt.detail.xhr.response).error : 'Failed to add server'));
             }
         });
-
-
 
         // Handle config file upload
         function uploadConfig(input) {
@@ -499,19 +511,323 @@
                     method: 'POST',
                     body: formData
                 })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        htmx.trigger('#serverList', 'load');
-                    } else {
-                        alert('Error: ' + data.error);
-                    }
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            htmx.trigger('#serverList', 'load');
+                        } else {
+                            alert('Error: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        alert('Error uploading config: ' + error);
+                    });
+            }
+        }
+
+        function showAddBlockModal(serverId) {
+            document.getElementById('blockServerId').value = serverId;
+            document.getElementById('addBlockForm').reset();
+            addBlockModal.show();
+        }
+
+        function showAddRegisterModal(serverId) {
+            document.getElementById('registerServerId').value = serverId;
+            document.getElementById('addRegisterForm').reset();
+            updateAddressRange();
+            updateFormatOptions();
+            addRegisterModal.show();
+        }
+
+        function addBlock() {
+            const serverId = document.getElementById('blockServerId').value;
+            const type = document.getElementById('blockType').value;
+            const startAddress = parseInt(document.getElementById('blockStartAddress').value);
+            const length = parseInt(document.getElementById('blockLength').value);
+
+            if (isNaN(startAddress) || isNaN(length)) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            // Calculate the actual Modbus address based on block type
+            let address = startAddress;
+            switch (type) {
+                case 'discrete':
+                    address += 10000;
+                    break;
+                case 'input':
+                    address += 30000;
+                    break;
+                case 'holding':
+                    address += 40000;
+                    break;
+            }
+
+            const block = {
+                type,
+                startAddress: address,
+                length,
+                registers: []
+            };
+
+            // Get current server configuration
+            fetch(`/api/servers/config/${serverId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    registerBlocks: [block]
                 })
-                .catch(error => {
-                    alert('Error uploading config: ' + error);
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addBlockModal.hide();
+                    htmx.trigger('#serverList', 'load');
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Error adding block: ' + error);
+            });
+        }
+
+        function addRegister() {
+            const serverId = document.getElementById('registerServerId').value;
+            const type = document.getElementById('registerType').value;
+            const name = document.getElementById('registerName').value;
+            const baseAddress = parseInt(document.getElementById('registerAddress').value);
+            const format = document.getElementById('registerFormat').value;
+
+            if (!name || isNaN(baseAddress)) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            let size = 1;
+            if (format === 'float') {
+                size = 2;
+            }
+
+            // Calculate the actual Modbus address based on register type
+            let address = baseAddress;
+            switch (type) {
+                case 'discrete':
+                    address += 10000;
+                    break;
+                case 'input':
+                    address += 30000;
+                    break;
+                case 'holding':
+                    address += 40000;
+                    break;
+            }
+
+            const register = {
+                name,
+                address,
+                format,
+                type
+            };
+
+            // Get current server configuration first and then add the new register
+            fetch(`/api/servers/config/${serverId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.registerBlocks) {
+                    const existingConfig = data;
+
+                    // check if the register is already in the range of any block
+                    let found = false;
+                    for (const block of existingConfig.registerBlocks) {
+                        if (address >= block.startAddress && address <= block.startAddress + block.length - 1) {
+                            // add the register to the block
+                            // check for null registers
+                            if (block.registers === null) {
+                                block.registers = [];
+                            }
+                            block.registers.push(register);
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    // if the register is not in the range of any block, add a new block
+                    if (!found) {
+                        existingConfig.registerBlocks.push({
+                            type,
+                            startAddress: address,
+                            length: size,
+                            registers: [register]
+                        });
+                    }
+
+                    // Update the server configuration
+                    fetch(`/api/servers/config/${serverId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(existingConfig)
+                    })
+                    htmx.trigger('#serverList', 'load');
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Error adding register: ' + error);
+            });
+        }
+
+        function showBulkAddModal(serverId) {
+            document.getElementById('bulkAddServerId').value = serverId;
+            document.getElementById('bulkAddForm').reset();
+            document.getElementById('bulkAddType').value = 'holding';
+            updateBulkAddFormatOptions();
+            bulkAddModal.show();
+        }
+
+        function updateBulkAddFormatOptions() {
+            const type = document.getElementById('bulkAddType').value;
+            const format = document.getElementById('bulkAddFormat');
+            
+            // Reset options
+            format.innerHTML = '';
+            
+            if (type === 'coil' || type === 'discrete') {
+                // For coils and discrete inputs, only boolean format makes sense
+                format.innerHTML = '<option value="boolean">Boolean</option>';
+            } else {
+                // For input and holding registers, all formats are available
+                format.innerHTML = `
+                    <option value="decimal">Decimal</option>
+                    <option value="hex">Hexadecimal</option>
+                    <option value="float">Float</option>
+                    <option value="boolean">Boolean</option>
+                `;
+            }
+        }
+
+        function processBulkAdd() {
+            const serverId = document.getElementById('bulkAddServerId').value;
+            const text = document.getElementById('bulkAddText').value;
+            const lines = text.split('\n').filter(line => line.trim());
+            const type = document.getElementById('bulkAddType').value;
+            const defaultFormat = document.getElementById('bulkAddFormat').value;
+            let lastAddress = -1;
+            let registers = [];
+
+            for (const line of lines) {
+                const parts = line.split(',').map(part => part.trim());
+                if (parts.length < 1) continue;
+
+                const name = parts[0];
+                let address = parts.length > 1 && parts[1] ? parseInt(parts[1]) : lastAddress + 1;
+                const format = parts.length > 2 ? parts[2] : defaultFormat;
+
+                let size = 1;
+                if (format === 'float') {
+                    size = 2;
+                }
+
+                if (!name || isNaN(address)) {
+                    alert(`Invalid line: ${line}`);
+                    continue;
+                }
+
+                lastAddress = address + size - 1;
+
+                // Calculate the actual Modbus address based on register type
+                switch (type) {
+                    case 'discrete':
+                        address += 10000;
+                        break;
+                    case 'input':
+                        address += 30000;
+                        break;
+                    case 'holding':
+                        address += 40000;
+                        break;
+                }
+
+
+
+                registers.push({
+                    name,
+                    address,
+                    format,
+                    type
                 });
             }
+
+            if (registers.length === 0) {
+                alert('No valid registers to add');
+                return;
+            }
+
+            // Get current server configuration first and then add the new registers
+            fetch(`/api/servers/config/${serverId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.registerBlocks) {
+                    // Add the new registers to the existing configuration
+                    const existingConfig = data;
+
+                    // find last address in the 
+
+                    existingConfig.registerBlocks.push({
+                        type,
+                        startAddress: registers[0].address,
+                        length: lastAddress-registers[0].address+1,
+                        registers: registers
+                    });
+
+                    // Update the server configuration
+                    fetch(`/api/servers/config/${serverId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            registerBlocks: [{
+                                type,
+                                startAddress: registers[0].address,
+                                length: registers[registers.length-1].address+registers[registers.length-1].size,
+                                registers: registers
+                            }]
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            bulkAddModal.hide();
+                            htmx.trigger('#serverList', 'load');
+                        } else {
+                            alert('Error: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        alert('Error adding registers: ' + error);
+                    });
+                }
+            });
         }
     </script>
 </body>
-</html> 
+
+</html>
