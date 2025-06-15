@@ -1,0 +1,4 @@
+github.com/rustyoz/modbus v0.0.0-20250614111731-f7fb06d31006 h1:UE0z3/MT7HKCroir153pB+ELffCfNBxGwMdo6DL6JXQ=
+github.com/rustyoz/modbus v0.0.0-20250614111731-f7fb06d31006/go.mod h1:n7t9pW8u/lK/UgCiQGfD45AIaAUrqIqKd+cz3X/RaM4=
+github.com/rustyoz/serial v0.0.0-20250614111706-0a7c60f12fd6 h1:vLo+s4l4ZMlp4Jo3n0Qgk7LJB9WgFdFBjdveBIBnpm8=
+github.com/rustyoz/serial v0.0.0-20250614111706-0a7c60f12fd6/go.mod h1:Jew/a/HCEXqNB+F6zG0vejjVh5tn2JnUvms5EgQpzD4=
