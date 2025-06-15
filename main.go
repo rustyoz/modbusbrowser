@@ -2,17 +2,41 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"html/template"
 	"io"
 	"log"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
+
+// LogLevel represents the logging level
+type LogLevel int
+
+const (
+	ErrorLevel LogLevel = iota
+	InfoLevel
+	DebugLevel
+)
+
+var (
+	servers  = make(map[string]*ModbusServer)
+	mu       sync.RWMutex
+	logLevel LogLevel
+)
+
+// logMessage logs a message if the current log level is sufficient
+func logMessage(level LogLevel, format string, v ...interface{}) {
+	if level <= logLevel {
+		log.Printf(format, v...)
+	}
+}
 
 // RegisterConfig represents the configuration for a register
 type RegisterConfig struct {
@@ -62,11 +86,6 @@ type ModbusServer struct {
 	registerMap    map[uint16]RegisterConfig `json:"-"`
 	dataModel      ModbusDataModel           `json:"-"`
 }
-
-var (
-	servers = make(map[string]*ModbusServer)
-	mu      sync.RWMutex
-)
 
 // HTML templates
 const (
@@ -130,6 +149,51 @@ const (
 )
 
 func main() {
+	// Custom usage message
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "Modbus Browser v0.1.0\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "A web-based Modbus client for monitoring and configuring Modbus devices\n\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "GitHub: https://github.com/rustyoz/modbusbrowser\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "Author: https://github.com/rustyoz\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "Issues: https://github.com/rustyoz/modbusbrowser/issues\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "License: https://github.com/rustyoz/modbusbrowser/blob/main/LICENSE\n\n")
+
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), "\nOptions:\n")
+		flag.PrintDefaults()
+		fmt.Fprintf(flag.CommandLine.Output(), "\nLog Levels:\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  error  - Only show error messages (default)\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  info   - Show error and info messages\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  debug  - Show all messages including debug\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "\nExamples:\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  %s -port 8080 -log-level debug\n", os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), "  %s -port 9000 -log-level info\n", os.Args[0])
+	}
+
+	// Parse command line flags
+	port := flag.Int("port", 8080, "Port to start the server on")
+	logLevelStr := flag.String("log-level", "error", "Log level (error, info, debug)")
+	flag.Parse()
+
+	// Set log level
+	switch strings.ToLower(*logLevelStr) {
+	case "debug":
+		logLevel = DebugLevel
+	case "info":
+		logLevel = InfoLevel
+	default:
+		logLevel = ErrorLevel
+	}
+
+	// Print intro message without logging
+	fmt.Println("Modbus Browser v0.1.0")
+	fmt.Println("https://github.com/rustyoz/modbusbrowser")
+	fmt.Println("https://github.com/rustyoz")
+	fmt.Println("https://github.com/rustyoz/modbusbrowser/issues")
+	fmt.Println("https://github.com/rustyoz/modbusbrowser/releases")
+	fmt.Println("https://github.com/rustyoz/modbusbrowser/blob/main/LICENSE")
+	fmt.Println("https://github.com/rustyoz/modbusbrowser/blob/main/README.md")
+
 	// Serve static files
 	fs := http.FileServer(http.Dir("static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
@@ -141,10 +205,8 @@ func main() {
 	http.HandleFunc("/api/config/upload", handleConfigUpload)
 	http.HandleFunc("/api/config", handleGetConfig)
 
-	// Start the server
-	port := 8080
-	log.Printf("Starting server on port %d...", port)
-	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
+	logMessage(InfoLevel, "Starting server on port %d...", *port)
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -270,7 +332,9 @@ func handleServer(w http.ResponseWriter, r *http.Request) {
 		// Only include values that are configured in register blocks
 		for _, block := range server.RegisterBlocks {
 
-			log.Printf("block: %+v", block)
+			// log the block details
+			logMessage(DebugLevel, "block: %+v", block)
+
 			for i := uint16(0); i < block.Length; i++ {
 				addr := block.StartAddress + i
 				regConfig, hasConfig := server.registerMap[addr]
@@ -398,8 +462,7 @@ func handleServer(w http.ResponseWriter, r *http.Request) {
 
 // handleConfigUpload handles the upload of a configuration file or direct JSON configuration
 func handleConfigUpload(w http.ResponseWriter, r *http.Request) {
-
-	log.Printf("handleConfigUpload: %s %s", r.Method, r.URL.Path)
+	logMessage(DebugLevel, "handleConfigUpload: %s %s", r.Method, r.URL.Path)
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -433,19 +496,19 @@ func handleConfigUpload(w http.ResponseWriter, r *http.Request) {
 
 		if err := json.Unmarshal(data, &config); err != nil {
 			handleError(w, r, fmt.Sprintf("Invalid JSON: %v", err))
-			log.Printf("Invalid JSON: %v", err)
+			logMessage(ErrorLevel, "Invalid JSON: %v", err)
 			return
 		}
 	} else {
 		// Handle direct JSON
 		if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
 			handleError(w, r, fmt.Sprintf("Invalid JSON: %v", err))
-			log.Printf("Invalid JSON: %v", err)
+			logMessage(ErrorLevel, "Invalid JSON: %v", err)
 			return
 		}
 	}
 
-	fmt.Printf("config: %+v", config)
+	logMessage(DebugLevel, "config: %+v", config)
 
 	// Process each server in the config
 	for _, server := range config.Servers {
@@ -467,7 +530,7 @@ func handleConfigUpload(w http.ResponseWriter, r *http.Request) {
 		client, err := NewModbusClient(server.Address, server.Port)
 		if err != nil {
 			handleError(w, r, fmt.Sprintf("Failed to create Modbus client for server %s: %v", server.ID, err))
-			log.Printf("Failed to create Modbus client for server %s: %v", server.ID, err)
+			logMessage(ErrorLevel, "Failed to create Modbus client for server %s: %v", server.ID, err)
 			continue
 		}
 		server.client = client
@@ -488,7 +551,7 @@ func handleConfigUpload(w http.ResponseWriter, r *http.Request) {
 
 // handleGetConfig returns the current server configuration
 func handleGetConfig(w http.ResponseWriter, r *http.Request) {
-	log.Printf("handleGetConfig: %s %s", r.Method, r.URL.Path)
+	logMessage(DebugLevel, "handleGetConfig: %s %s", r.Method, r.URL.Path)
 
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -511,7 +574,7 @@ func handleGetConfig(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewEncoder(w).Encode(config)
 	if err != nil {
-		log.Printf("Error encoding config: %v", err)
+		logMessage(ErrorLevel, "Error encoding config: %v", err)
 	}
 }
 
@@ -668,10 +731,10 @@ func pollServer(server *ModbusServer) {
 			case block.StartAddress < 10000: // Coils
 				values, err := server.client.ReadCoils(block.StartAddress, block.Length)
 				if err != nil {
-					log.Printf("Error reading coils for server %s at address %d: %v", server.ID, block.StartAddress, err)
+					logMessage(ErrorLevel, "Error reading coils for server %s at address %d: %v", server.ID, block.StartAddress, err)
 					continue
 				}
-				log.Printf("Read Coils ok: startaddress: %+v, values: %+v", block.StartAddress, values)
+				logMessage(DebugLevel, "Read Coils ok: startaddress: %+v, values: %+v", block.StartAddress, values)
 
 				// update dataModel using values by copying values to dataModel
 				copy(server.dataModel.Coils[block.StartAddress:block.StartAddress+block.Length], values)
@@ -679,10 +742,10 @@ func pollServer(server *ModbusServer) {
 			case block.StartAddress < 20000: // Discrete Inputs
 				values, err := server.client.ReadDiscreteInputs(block.StartAddress-10000, block.Length)
 				if err != nil {
-					log.Printf("Error reading discrete inputs for server %s at address %d: %v", server.ID, block.StartAddress, err)
+					logMessage(ErrorLevel, "Error reading discrete inputs for server %s at address %d: %v", server.ID, block.StartAddress, err)
 					continue
 				}
-				log.Printf("Read Holding Registers ok: startaddress: %+v, values: %+v", block.StartAddress, values)
+				logMessage(DebugLevel, "Read Holding Registers ok: startaddress: %+v, values: %+v", block.StartAddress, values)
 
 				// update dataModel using values by copying values to dataModel
 				copy(server.dataModel.DiscreteInputs[block.StartAddress-10000:block.StartAddress-10000+block.Length], values)
@@ -690,10 +753,10 @@ func pollServer(server *ModbusServer) {
 			case block.StartAddress < 40000: // Input Registers
 				values, err := server.client.ReadInputRegisters(block.StartAddress-30000, block.Length)
 				if err != nil {
-					log.Printf("Error reading input registers for server %s at address %d: %v", server.ID, block.StartAddress, err)
+					logMessage(ErrorLevel, "Error reading input registers for server %s at address %d: %v", server.ID, block.StartAddress, err)
 					continue
 				}
-				log.Printf("Read Input Registers ok: startaddress: %+v, values: %+v", block.StartAddress, values)
+				logMessage(DebugLevel, "Read Input Registers ok: startaddress: %+v, values: %+v", block.StartAddress, values)
 
 				// update dataModel using values by copying values to dataModel
 				copy(server.dataModel.InputRegisters[block.StartAddress-30000:block.StartAddress-30000+block.Length], values)
@@ -701,10 +764,10 @@ func pollServer(server *ModbusServer) {
 			default: // Holding Registers
 				values, err := server.client.ReadHoldingRegisters(block.StartAddress-40000, block.Length)
 				if err != nil {
-					log.Printf("Error reading holding registers for server %s at address %d: %v", server.ID, block.StartAddress, err)
+					logMessage(ErrorLevel, "Error reading holding registers for server %s at address %d: %v", server.ID, block.StartAddress, err)
 					continue
 				}
-				log.Printf("Read Holding Registers ok: startaddress: %+v, values: %+v", block.StartAddress, values)
+				logMessage(DebugLevel, "Read Holding Registers ok: startaddress: %+v, values: %+v", block.StartAddress, values)
 				// update dataModel using values by copying values to dataModel
 				copy(server.dataModel.HoldingRegisters[block.StartAddress-40000:block.StartAddress-40000+block.Length], values)
 			}
