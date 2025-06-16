@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -8,13 +9,18 @@ import (
 	"io"
 	"log"
 	"math"
+	"mime"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
+
+//go:embed static
+var staticFiles embed.FS
 
 // LogLevel represents the logging level
 type LogLevel int
@@ -149,6 +155,21 @@ const (
 		{{end}}`
 )
 
+// serveStaticFile serves a file from the embedded filesystem with the correct MIME type
+func serveStaticFile(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/static/")
+
+	// Get the file extension and set the correct MIME type
+	ext := filepath.Ext(path)
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType != "" {
+		w.Header().Set("Content-Type", mimeType)
+	}
+
+	// Serve the file from the static directory
+	http.FileServer(http.FS(staticFiles)).ServeHTTP(w, r)
+}
+
 func main() {
 	// Custom usage message
 	flag.Usage = func() {
@@ -195,10 +216,9 @@ func main() {
 	fmt.Println("https://github.com/rustyoz/modbusbrowser/blob/main/LICENSE")
 	fmt.Println("https://github.com/rustyoz/modbusbrowser/blob/main/README.md")
 
-	// Serve static files
-	fs := http.FileServer(http.Dir("static"))
-	http.Handle("/static/", http.StripPrefix("/static/", fs))
-	http.Handle("/", fs)
+	// Serve static files from embedded filesystem with correct MIME types
+	http.HandleFunc("/static/", serveStaticFile)
+	http.Handle("/", http.HandlerFunc(ServeIndex))
 
 	http.HandleFunc("/api/servers/config/", handleServerConfig)
 	http.HandleFunc("/api/servers/", handleServer)
@@ -206,7 +226,7 @@ func main() {
 	http.HandleFunc("/api/config/upload", handleConfigUpload)
 	http.HandleFunc("/api/config", handleGetConfig)
 
-	logMessage(InfoLevel, "Starting server on port %d...", *port)
+	logMessage(ErrorLevel, "Starting server on port %d...", *port)
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
 		log.Fatal(err)
 	}

@@ -1,13 +1,9 @@
 package main
 
 import (
-	"embed"
 	"html/template"
 	"net/http"
 )
-
-//go:embed static/index.html
-var staticFiles embed.FS
 
 // ServeIndex serves the main index page
 func ServeIndex(w http.ResponseWriter, r *http.Request) {
