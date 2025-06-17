@@ -32,9 +32,10 @@ const (
 )
 
 var (
-	servers  = make(map[string]*ModbusServer)
-	mu       sync.RWMutex
-	logLevel LogLevel
+	servers   = make(map[string]*ModbusServer)
+	mu        sync.RWMutex
+	logLevel  LogLevel
+	templates *template.Template
 )
 
 // logMessage logs a message if the current log level is sufficient
@@ -83,28 +84,37 @@ type ModbusDataModel struct {
 
 // ModbusServer represents a single Modbus server configuration
 type ModbusServer struct {
-	ID             string                    `json:"id"`
-	Address        string                    `json:"address"`
-	Port           int                       `json:"port"`
-	PollRate       int                       `json:"pollRate"`
-	RegisterBlocks []RegisterBlock           `json:"registerBlocks"`
-	client         *ModbusClient             `json:"-"`
-	mu             sync.Mutex                `json:"-"`
-	registerMap    map[uint16]RegisterConfig `json:"-"`
-	dataModel      ModbusDataModel           `json:"-"`
+	ID               string                    `json:"id"`
+	Address          string                    `json:"address"`
+	Port             int                       `json:"port"`
+	PollRate         int                       `json:"pollRate"`
+	RegisterBlocks   []RegisterBlock           `json:"registerBlocks"`
+	client           *ModbusClient             `json:"-"`
+	mu               sync.Mutex                `json:"-"`
+	registerMap      map[uint16]RegisterConfig `json:"-"`
+	dataModel        ModbusDataModel           `json:"-"`
+	ConnectionStatus string                    `json:"connectionStatus"` // "ok" or "error"
+	ConnectionError  string                    `json:"connectionError,omitempty"`
+	LastDataReceived time.Time                 `json:"lastDataReceived"`
 }
 
 // HTML templates
 const (
 	serverListTemplate = `
+		{{define "serverList"}}
 			{{range .}}
 			<div class="card mb-4" id="server-{{.ID}}">
 				<div class="card-header d-flex justify-content-between align-items-center">
 					<div class="d-flex align-items-center">
+						<!-- Status dot -->
+						<span style="display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:8px;vertical-align:middle;background-color:{{if eq .ConnectionStatus "ok"}}#28a745{{else}}#dc3545{{end}};border:1px solid #888;"></span>
 						<button class="btn btn-sm btn-outline-secondary me-2" onclick="toggleServerTable('{{.ID}}')">
 							<span id="toggle-icon-{{.ID}}">▼</span>
 						</button>
-						<h5 class="mb-0">Server: {{.ID}}</h5>
+						<div>
+							<h5 class="mb-0">Server: {{.ID}}</h5>
+							<div hx-get="/api/serverstatus/{{.ID}}" hx-target="#server-{{.ID}}-status" hx-swap="innerHTML" hx-trigger="load, every 1s" id="server-{{.ID}}-status"></div>
+						</div>
 					</div>
 					<div>
 						<button class="btn btn-info btn-sm me-2" onclick="showAddBlockModal('{{.ID}}')" data-server-id="{{.ID}}">
@@ -142,17 +152,26 @@ const (
 					</div>
 				</div>
 			</div>
-			{{end}}`
+			{{end}}
+		{{end}}`
 
 	registerTableTemplate = `
-		{{range .}}
+		{{define "registerTable"}}
+		{{range .Data}}
 		<tr>
 			<td>{{.Address}}</td>
 			<td>{{.Name}}</td>
 			<td class="register-value">{{.Value}}</td>
 			<td>{{.Format}}</td>
 		</tr>
-		{{end}}`
+		{{end}}
+		<tr>
+			<td colspan="4" style="display:none;" id="last-data-{{.ServerID}}">{{.LastDataReceived.Format "15:04:05.000"}}</td>
+		</tr>
+		{{end}}
+`
+
+	serverStatusTemplate = `{{define "serverStatus"}}<small class="text-muted">IP: {{.Address}} | Port: {{.Port}} | Poll: {{.PollRate}} ms | Last Data Received: {{.LastDataReceived.Format "15:04:05.000"}}</small></div>{{end}}`
 )
 
 // serveStaticFile serves a file from the embedded filesystem with the correct MIME type
@@ -171,6 +190,11 @@ func serveStaticFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	// Parse templates once at startup
+	templates = template.Must(template.New("serverStatus").Parse(serverStatusTemplate))
+	templates = template.Must(templates.Parse(serverListTemplate))
+	templates = template.Must(templates.Parse(registerTableTemplate))
+
 	// Custom usage message
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Modbus Browser v0.1.0\n")
@@ -225,6 +249,7 @@ func main() {
 	http.HandleFunc("/api/servers", handleServers)
 	http.HandleFunc("/api/config/upload", handleConfigUpload)
 	http.HandleFunc("/api/config", handleGetConfig)
+	http.HandleFunc("/api/serverstatus/", handleServerStatus)
 
 	logMessage(ErrorLevel, "Starting server on port %d...", *port)
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
@@ -237,16 +262,29 @@ func handleServers(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		// Return list of servers
 		mu.RLock()
-		serverList := make([]map[string]string, 0, len(servers))
-		for id := range servers {
-			serverList = append(serverList, map[string]string{"ID": id})
+		var serverList []map[string]interface{}
+		serverList = make([]map[string]interface{}, 0, len(servers))
+		for id, srv := range servers {
+			srv.mu.Lock()
+			serverList = append(serverList, map[string]interface{}{
+				"ID":               id,
+				"ConnectionStatus": srv.ConnectionStatus,
+				"ConnectionError":  srv.ConnectionError,
+				"Address":          srv.Address,
+				"Port":             srv.Port,
+				"PollRate":         srv.PollRate,
+				"LastDataReceived": srv.LastDataReceived,
+			})
+			srv.mu.Unlock()
 		}
 		mu.RUnlock()
 
 		if isHtmxRequest(r) {
-			tmpl := template.Must(template.New("serverList").Parse(serverListTemplate))
 			w.Header().Set("Content-Type", "text/html")
-			tmpl.Execute(w, serverList)
+			if err := templates.ExecuteTemplate(w, "serverList", serverList); err != nil {
+				handleError(w, r, fmt.Sprintf("Error executing template: %v", err))
+				return
+			}
 		} else {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"servers": serverList,
@@ -283,21 +321,45 @@ func handleServers(w http.ResponseWriter, r *http.Request) {
 		dataModel := ModbusDataModel{}
 
 		server := &ModbusServer{
-			ID:          config.ID,
-			Address:     config.Address,
-			Port:        config.Port,
-			PollRate:    config.PollRate,
-			registerMap: make(map[uint16]RegisterConfig),
-			dataModel:   dataModel,
+			ID:               config.ID,
+			Address:          config.Address,
+			Port:             config.Port,
+			PollRate:         config.PollRate,
+			registerMap:      make(map[uint16]RegisterConfig),
+			dataModel:        dataModel,
+			ConnectionStatus: "error", // default to error until connected
 		}
 
-		// Create Modbus client
+		// Try to create Modbus client
 		client, err := NewModbusClient(server.Address, server.Port)
-		if err != nil {
-			handleError(w, r, fmt.Sprintf("Failed to create Modbus client: %v", err))
-			return
+		if err == nil {
+			server.client = client
+			server.ConnectionStatus = "ok"
+			server.ConnectionError = ""
+		} else {
+			server.ConnectionStatus = "error"
+			server.ConnectionError = err.Error()
+			// Start retry goroutine
+			go func(s *ModbusServer) {
+				for {
+					time.Sleep(1 * time.Second)
+					client, err := NewModbusClient(s.Address, s.Port)
+					if err == nil {
+						s.mu.Lock()
+						s.client = client
+						s.ConnectionStatus = "ok"
+						s.ConnectionError = ""
+						s.mu.Unlock()
+						break
+					} else {
+						s.mu.Lock()
+						s.ConnectionStatus = "error"
+						s.ConnectionError = err.Error()
+						s.mu.Unlock()
+					}
+				}
+			}(server)
 		}
-		server.client = client
 
 		// Add server to map
 		mu.Lock()
@@ -310,11 +372,19 @@ func handleServers(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 		if isHtmxRequest(r) {
 			w.Header().Set("HX-Trigger", "load")
-			// Return the updated server list
-			serverList := []map[string]string{{"ID": server.ID}}
-			tmpl := template.Must(template.New("serverList").Parse(serverListTemplate))
 			w.Header().Set("Content-Type", "text/html")
-			tmpl.Execute(w, serverList)
+			if err := templates.ExecuteTemplate(w, "serverList", []map[string]interface{}{{
+				"ID":               server.ID,
+				"ConnectionStatus": server.ConnectionStatus,
+				"ConnectionError":  server.ConnectionError,
+				"Address":          server.Address,
+				"Port":             server.Port,
+				"PollRate":         server.PollRate,
+				"LastDataReceived": server.LastDataReceived,
+			}}); err != nil {
+				handleError(w, r, fmt.Sprintf("Error executing template: %v", err))
+				return
+			}
 		} else {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": true,
@@ -512,9 +582,15 @@ func handleServer(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if isHtmxRequest(r) {
-			tmpl := template.Must(template.New("registerTable").Parse(registerTableTemplate))
 			w.Header().Set("Content-Type", "text/html")
-			tmpl.Execute(w, data)
+			if err := templates.ExecuteTemplate(w, "registerTable", map[string]interface{}{
+				"Data":             data,
+				"ServerID":         id,
+				"LastDataReceived": server.LastDataReceived,
+			}); err != nil {
+				handleError(w, r, fmt.Sprintf("Error executing template: %v", err))
+				return
+			}
 		} else {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": true,
@@ -615,7 +691,6 @@ func handleConfigUpload(w http.ResponseWriter, r *http.Request) {
 		server.client = nil // Will be set below
 		server.registerMap = registerMap
 		server.dataModel = ModbusDataModel{}
-		server.RegisterBlocks = server.RegisterBlocks
 
 		// Create Modbus client
 		client, err := NewModbusClient(server.Address, server.Port)
@@ -637,14 +712,11 @@ func handleConfigUpload(w http.ResponseWriter, r *http.Request) {
 
 	if isHtmxRequest(r) {
 		w.Header().Set("HX-Trigger", "load")
-		// Return the updated server list
-		serverList := make([]map[string]string, 0, len(servers))
-		for id := range servers {
-			serverList = append(serverList, map[string]string{"ID": id})
-		}
-		tmpl := template.Must(template.New("serverList").Parse(serverListTemplate))
 		w.Header().Set("Content-Type", "text/html")
-		tmpl.Execute(w, serverList)
+		if err := templates.ExecuteTemplate(w, "serverList", config.Servers); err != nil {
+			handleError(w, r, fmt.Sprintf("Error executing template: %v", err))
+			return
+		}
 	} else {
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
@@ -828,53 +900,107 @@ func pollServer(server *ModbusServer) {
 		}
 
 		server.mu.Lock()
+		if server.client == nil {
+			server.ConnectionStatus = "error"
+			server.ConnectionError = "not connected"
+			server.mu.Unlock()
+			continue
+		}
 		// Process each register block
 		for _, block := range server.RegisterBlocks {
 			switch {
 			case block.StartAddress < 10000: // Coils
 				values, err := server.client.ReadCoils(block.StartAddress, block.Length)
 				if err != nil {
-					logMessage(ErrorLevel, "Error reading coils for server %s at address %d: %v", server.ID, block.StartAddress, err)
-					continue
+					server.ConnectionStatus = "error"
+					server.ConnectionError = err.Error()
+					server.mu.Unlock()
+					// Start retry goroutine if not already retrying
+					go retryConnection(server)
+					return
 				}
-				logMessage(DebugLevel, "Read Coils ok: startaddress: %+v, values: %+v", block.StartAddress, values)
-
-				// update dataModel using values by copying values to dataModel
 				copy(server.dataModel.Coils[block.StartAddress:block.StartAddress+block.Length], values)
-
 			case block.StartAddress < 20000: // Discrete Inputs
 				values, err := server.client.ReadDiscreteInputs(block.StartAddress-10000, block.Length)
 				if err != nil {
-					logMessage(ErrorLevel, "Error reading discrete inputs for server %s at address %d: %v", server.ID, block.StartAddress, err)
-					continue
+					server.ConnectionStatus = "error"
+					server.ConnectionError = err.Error()
+					server.mu.Unlock()
+					go retryConnection(server)
+					return
 				}
-				logMessage(DebugLevel, "Read Holding Registers ok: startaddress: %+v, values: %+v", block.StartAddress, values)
-
-				// update dataModel using values by copying values to dataModel
 				copy(server.dataModel.DiscreteInputs[block.StartAddress-10000:block.StartAddress-10000+block.Length], values)
-
 			case block.StartAddress < 40000: // Input Registers
 				values, err := server.client.ReadInputRegisters(block.StartAddress-30000, block.Length)
 				if err != nil {
-					logMessage(ErrorLevel, "Error reading input registers for server %s at address %d: %v", server.ID, block.StartAddress, err)
-					continue
+					server.ConnectionStatus = "error"
+					server.ConnectionError = err.Error()
+					server.mu.Unlock()
+					go retryConnection(server)
+					return
 				}
-				logMessage(DebugLevel, "Read Input Registers ok: startaddress: %+v, values: %+v", block.StartAddress, values)
-
-				// update dataModel using values by copying values to dataModel
 				copy(server.dataModel.InputRegisters[block.StartAddress-30000:block.StartAddress-30000+block.Length], values)
-
 			default: // Holding Registers
 				values, err := server.client.ReadHoldingRegisters(block.StartAddress-40000, block.Length)
 				if err != nil {
-					logMessage(ErrorLevel, "Error reading holding registers for server %s at address %d: %v", server.ID, block.StartAddress, err)
-					continue
+					server.ConnectionStatus = "error"
+					server.ConnectionError = err.Error()
+					server.mu.Unlock()
+					go retryConnection(server)
+					return
 				}
-				logMessage(DebugLevel, "Read Holding Registers ok: startaddress: %+v, values: %+v", block.StartAddress, values)
-				// update dataModel using values by copying values to dataModel
 				copy(server.dataModel.HoldingRegisters[block.StartAddress-40000:block.StartAddress-40000+block.Length], values)
 			}
+			// Set last data received time after successful read
+			server.LastDataReceived = time.Now()
+		}
+		server.ConnectionStatus = "ok"
+		server.ConnectionError = ""
+		server.mu.Unlock()
+	}
+}
+
+// retryConnection tries to reconnect every second until successful, then restarts polling
+func retryConnection(server *ModbusServer) {
+	for {
+		time.Sleep(1 * time.Second)
+		client, err := NewModbusClient(server.Address, server.Port)
+		server.mu.Lock()
+		if err == nil {
+			server.client = client
+			server.ConnectionStatus = "ok"
+			server.ConnectionError = ""
+			server.mu.Unlock()
+			go pollServer(server)
+			return
+		} else {
+			server.ConnectionStatus = "error"
+			server.ConnectionError = err.Error()
 		}
 		server.mu.Unlock()
+	}
+}
+
+// handleServerStatus serves the status line for a server
+func handleServerStatus(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+	id := parts[3]
+	mu.RLock()
+	server, exists := servers[id]
+	mu.RUnlock()
+	if !exists {
+		http.Error(w, "Server not found", http.StatusNotFound)
+		return
+	}
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	w.Header().Set("Content-Type", "text/html")
+	if err := templates.ExecuteTemplate(w, "serverStatus", server); err != nil {
+		handleError(w, r, fmt.Sprintf("Error executing template: %v", err))
+		return
 	}
 }
